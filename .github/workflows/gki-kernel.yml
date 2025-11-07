@@ -22,12 +22,12 @@ on:
       os_patch_level:
         required: true
         type: string
-      kernelsu_variant:
-        required: true
-        type: string
-      kernelsu_branch:
-        required: true
-        type: string
+      # kernelsu_variant:
+      #   required: true
+      #   type: string
+      # kernelsu_branch:
+      #   required: true
+      #   type: string
       # kernelsu_branch_other:
       #   required: false
       #   type: string
@@ -45,14 +45,7 @@ on:
         required: true
         type: boolean
         default: true
-      supp_op:
-        required: true
-        type: boolean
-        default: false
-      BBG:
-        required: true
-        type: boolean
-        default: false
+
 jobs:
   build-kernel-kernelsu-susfs:
     runs-on: ubuntu-latest
@@ -129,13 +122,6 @@ jobs:
           echo "MKBOOTIMG=$GITHUB_WORKSPACE/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
           echo "UNPACK_BOOTIMG=$GITHUB_WORKSPACE/mkbootimg/unpack_bootimg.py" >> $GITHUB_ENV
 
-      - name: 密钥设置——已经过mkppk修改
-        env:
-          BOOT_SIGN_KEY: ${{ secrets.BOOT_SIGN_KEY }}
-        run: |
-            openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 > ./kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem
-            echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
-
       - name: 安装仓库
         run: |
           # Install dependencies
@@ -148,14 +134,13 @@ jobs:
         run: |
           echo "Cloning AnyKernel3 and other dependencies..."
 
-          ANYKERNEL_BRANCH="gki-2.0"
           SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
 
           # Debug print the branches
           echo "Using branch for SUSFS: $SUSFS_BRANCH"
 
           # Clone repositories using the branch names
-          git clone https://github.com/WildPlusKernel/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
+          git clone https://github.com/xiaomi-sm4450-sky/AnyKernel3.git -b gki-2.0
           git clone https://github.com/ShirkNeko/susfs4ksu.git -b "$SUSFS_BRANCH"
           git clone https://github.com/Tools-cx-app/kernel_patches.git
           # Sukisu的补丁仓库
@@ -199,10 +184,9 @@ jobs:
           cd "$CONFIG"
 
           echo "Adding KernelSU SukiSU..."
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash susfs-test # susfs-main
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main # susfs-test
 
       # - name: 添加 Baseband-guard 支持
-      #   if: ${{ github.event.inputs.BBG == 'true' }}
       #   run: |
       #     echo "更改为配置目录: $CONFIG..."
       #     cd "$CONFIG/common"
@@ -265,15 +249,6 @@ jobs:
               sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
             fi
           fi
-  
-      - name: 应用新的HOOKS补丁
-        run: |
-          echo "更改为配置目录: $CONFIG..."
-          cd "$CONFIG/common"
-
-          echo "Applying hooks for SukiSU..."
-          cp ../../SukiSU_patch/hooks/scope_min_manual_hooks_v1.6.patch ./
-          patch -p1 -F 3 < scope_min_manual_hooks_v1.6.patch
 
       - name: 复制源文件 & 应用LZ4KD & ZSTDN补丁
         if: ${{ inputs.use_zram }}
@@ -339,7 +314,6 @@ jobs:
           # SukiSU
           echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
 
           # Add additional tmpfs config setting
           echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -466,13 +440,12 @@ jobs:
           echo "Creating zip file: $ZIP_NAME..."
           mv ../Image ./Image
           zip -r "../$ZIP_NAME" ./*
-          rm ./Image
 
       - name: Upload to Telegram
         run: |
           echo "Uploading zip & Image to Telegram..."
           POST="https://api.telegram.org/bot${{ secrets.BOT_TOKEN }}/sendDocument"
-          curl -X POST -F "parse_mode=Markdown" -F "caption=`$ZIP_FILENAME`" -F "chat_id=${{ secrets.CHAT_ID }}" -F "document=@${ZIP_FILENAME}" "$POST"
+          curl -X POST -F "parse_mode=Markdown" -F "caption=\`$ZIP_FILENAME\`" -F "chat_id=${{ secrets.CHAT_ID }}" -F "document=@${ZIP_FILENAME}" "$POST"
 
       - name: 上传编译资产
         uses: actions/upload-artifact@v4
